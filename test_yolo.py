@@ -11,9 +11,9 @@ model = YOLO("yolov8n.pt")
 # instead of YOLO trying to hold all 5230 frames in memory
 results = model(
     source="data/match_clip.mp4",
-    stream=True,          # KEY: yields results one by one
+    stream=True,  # KEY: yields results one by one
     conf=0.3,
-    classes=[0, 32],      # person + sports ball
+    classes=[0, 32],  # person + sports ball
     device=0,
 )
 
