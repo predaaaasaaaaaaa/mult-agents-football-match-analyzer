@@ -12,3 +12,4 @@ wheels/
 .venv/
 *.pyc
 data/*.mp4
+data
