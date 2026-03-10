@@ -9,7 +9,12 @@ import supervision as sv
 model = YOLO("yolov8n.pt")
 
 # Initialize ByteTrack tracker
-tracker = sv.ByteTrack()
+tracker = sv.ByteTrack(
+    track_activation_threshold=0.5,  # Only confident detections start new tracks
+    lost_track_buffer=60,  # Remember lost players for 60 frames (~2 sec)
+    minimum_matching_threshold=0.8,  # Stricter matching = fewer ID switches
+    frame_rate=25,  # Match your clip's FPS
+)
 
 # Run YOLO in streaming mode (same as test_yolo.py)
 results = model(
