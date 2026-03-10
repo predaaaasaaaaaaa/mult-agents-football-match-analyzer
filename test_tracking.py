@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import supervision as sv
 import cv2
 
-model = YOLO("yolov8n.pt")
+model = YOLO("yolov8s.pt")
 
 # ByteTrack tracker
 tracker = sv.ByteTrack(
