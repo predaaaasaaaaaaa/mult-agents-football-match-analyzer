@@ -16,3 +16,5 @@ data/*.mp4
 runs/
 *.avi
 *.pt
+
+data/tracking_data.json
