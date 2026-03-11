@@ -1,6 +1,6 @@
 """
 run_pipeline.py
-Runs the full pipeline: Vision → Ball Interpolation → Save JSON → Events
+Runs the full pipeline: Vision → Ball Interpolation → Save JSON → Events → Teams
 Loads from cached JSON if available (skip YOLO re-run).
 """
 
@@ -9,6 +9,7 @@ import os
 from src.agents.vision.vision_agent import VisionAgent
 from src.agents.events.events_agent import EventsAgent
 from src.utils.ball_interpolation import BallInterpolator
+from src.utils.team_classifier import TeamClassifier
 
 
 def main():
@@ -54,10 +55,25 @@ def main():
     possession_log = events.detect_possession(enriched_data)
     changes = events.detect_possession_changes(possession_log)
 
-    # Print first 10 changes to eyeball them
     print(f"\nFirst 10 possession changes:")
     for c in changes[:10]:
         print(f"  Frame {c['frame']}: track_{c['from_track_id']} → track_{c['to_track_id']}")
+
+    # Step 5: Team Classification (jersey colors)
+    print("\n" + "=" * 50)
+    print("STEP 5: Team Classification (Jersey Colors)")
+    print("=" * 50)
+    classifier = TeamClassifier()
+    classifier.fit(video_path, enriched_data, sample_frames=100)
+    enriched_data = classifier.predict(video_path, enriched_data)
+
+    # Quick team count check
+    team_a = sum(1 for d in enriched_data if d.get("team") == "A")
+    team_b = sum(1 for d in enriched_data if d.get("team") == "B")
+    no_team = sum(1 for d in enriched_data if d["type"] == "player" and d.get("team") is None)
+    print(f"\nTeam A detections: {team_a}")
+    print(f"Team B detections: {team_b}")
+    print(f"Unclassified: {no_team}")
 
 
 if __name__ == "__main__":
