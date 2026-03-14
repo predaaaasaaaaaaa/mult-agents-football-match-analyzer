@@ -1,5 +1,4 @@
 """
-run_pipeline.py
 Runs the full pipeline: Vision → Interpolation → Teams → Events
 """
 
@@ -29,13 +28,13 @@ def main():
         print("STEP 1: Vision Agent (YOLO + ByteTrack)")
         print("=" * 50)
         vision = VisionAgent(model_path="yolov8s.pt")
-        tracking_data = vision.process(video_path, max_frames=500)
+        tracking_data = vision.process(video_path, max_frames=None)
 
         print("\n" + "=" * 50)
         print("STEP 2: Ball Interpolation")
         print("=" * 50)
         interpolator = BallInterpolator(max_gap=100)
-        enriched_data = interpolator.interpolate(tracking_data, total_frames=500)
+        enriched_data = interpolator.interpolate(tracking_data, total_frames=5230)
 
         print("\n" + "=" * 50)
         print("STEP 3: Saving tracking data")
@@ -80,9 +79,13 @@ def main():
     print(f"Turnovers: {len(turnovers)}")
 
     for p in passes:
-        print(f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})")
+        print(
+            f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})"
+        )
     for t in turnovers:
-        print(f"  TURN  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) → track_{t['to_track_id']} (Team {t['to_team']})")
+        print(
+            f"  TURN  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) → track_{t['to_track_id']} (Team {t['to_team']})"
+        )
 
 
 if __name__ == "__main__":
