@@ -132,31 +132,48 @@ class TeamClassifier:
 
     def _extract_torso_color(self, frame, player):
         """
-        Crop the top 40% of the player bounding box (torso area),
-        convert to HSV, return mean (H, S) — ignore V (brightness).
+        Crop the middle band of the player bounding box (torso core),
+        convert to HSV, return median (H, S) — ignore V (brightness).
+        Uses middle 30% vertically (skip head + shorts) and
+        middle 60% horizontally (skip edges that catch grass/background).
         """
         h_frame, w_frame = frame.shape[:2]
 
-        # Get bbox coords, clamp to frame bounds
         x = max(0, player["x"])
         y = max(0, player["y"])
         w = player["w"]
         h = player["h"]
 
-        # Top 40% = torso (skip shorts, shoes, grass)
-        torso_bottom = y + int(h * 0.4)
+        # Vertical: 20% to 50% of bbox = core torso (skip head and shorts)
+        torso_top = y + int(h * 0.2)
+        torso_bottom = y + int(h * 0.5)
 
-        # Clamp
-        x2 = min(x + w, w_frame)
-        torso_bottom = min(torso_bottom, h_frame)
+        # Horizontal: 20% to 80% of bbox = skip edges (grass bleed)
+        torso_left = x + int(w * 0.2)
+        torso_right = x + int(w * 0.8)
 
-        if x >= x2 or y >= torso_bottom:
+        # Clamp to frame bounds
+        torso_left = max(0, min(torso_left, w_frame))
+        torso_right = max(0, min(torso_right, w_frame))
+        torso_top = max(0, min(torso_top, h_frame))
+        torso_bottom = max(0, min(torso_bottom, h_frame))
+
+        if torso_left >= torso_right or torso_top >= torso_bottom:
             return None
 
-        crop = frame[y:torso_bottom, x:x2]
+        crop = frame[torso_top:torso_bottom, torso_left:torso_right]
 
-        if crop.size == 0:
+        if crop.size == 0 or crop.shape[0] < 3 or crop.shape[1] < 3:
             return None
+
+        # Convert to HSV
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+        # Median H and S (more robust than mean against outliers)
+        median_h = np.median(hsv[:, :, 0])
+        median_s = np.median(hsv[:, :, 1])
+
+        return [median_h, median_s]
 
         # Convert to HSV
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
