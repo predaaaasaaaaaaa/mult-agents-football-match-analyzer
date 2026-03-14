@@ -63,7 +63,7 @@ def main():
             json.dump(enriched_data, f)
         print(f"Saved team-labeled data to {enriched_path}")
 
-    # Step 5: Events Agent — possession + changes + passes
+    # Step 5: Events Agent — possession + changes + passes + tackles
     print("\n" + "=" * 50)
     print("STEP 5: Events Agent")
     print("=" * 50)
@@ -71,21 +71,22 @@ def main():
     possession_log = events.detect_possession(enriched_data)
     changes = events.detect_possession_changes(possession_log)
     passes, turnovers = events.detect_passes(changes)
+    tackles, interceptions = events.detect_tackles(turnovers, enriched_data)
 
     print(f"\n--- Results ---")
     print(f"Possession frames: {len(possession_log)}")
     print(f"Possession changes: {len(changes)}")
     print(f"Passes: {len(passes)}")
     print(f"Turnovers: {len(turnovers)}")
+    print(f"  Tackles: {len(tackles)}")
+    print(f"  Interceptions: {len(interceptions)}")
 
     for p in passes:
-        print(
-            f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})"
-        )
-    for t in turnovers:
-        print(
-            f"  TURN  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) → track_{t['to_track_id']} (Team {t['to_team']})"
-        )
+        print(f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})")
+    for t in tackles:
+        print(f"  TACKLE  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) tackled by track_{t['to_track_id']} (Team {t['to_team']}) [{t['distance']}px]")
+    for i in interceptions:
+        print(f"  INTERCEPT  Frame {i['frame']}: track_{i['from_track_id']} (Team {i['from_team']}) → track_{i['to_track_id']} (Team {i['to_team']})")
 
 
 if __name__ == "__main__":

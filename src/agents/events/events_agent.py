@@ -175,3 +175,60 @@ class EventsAgent:
 
         print(f"[EventsAgent] Passes: {len(passes)}, Turnovers: {len(turnovers)}")
         return passes, turnovers
+
+    def detect_tackles(self, turnovers, tracking_data):
+        """
+        Classify turnovers as tackles or interceptions based on
+        proximity between the two players at the moment of the change.
+
+        Close together → tackle (physical challenge won the ball)
+        Far apart → interception or failed pass
+
+        Args:
+            turnovers: Output from detect_passes() — turnover list
+            tracking_data: Full tracking data (to look up player positions)
+
+        Returns:
+            (tackles, interceptions) — two separate lists
+        """
+        # Build lookup: (frame, track_id) → player dict
+        player_lookup = {}
+        for d in tracking_data:
+            if d["type"] == "player":
+                player_lookup[(d["frame"], d["track_id"])] = d
+
+        tackles = []
+        interceptions = []
+        tackle_radius = 80  # pixels — two players within this = tackle
+
+        for turn in turnovers:
+            frame = turn["frame"]
+            from_id = turn["from_track_id"]
+            to_id = turn["to_track_id"]
+
+            from_player = player_lookup.get((frame, from_id))
+            to_player = player_lookup.get((frame, to_id))
+
+            if from_player and to_player:
+                # Distance between feet positions
+                from_x = from_player["x"] + from_player["w"] / 2
+                from_y = from_player["y"] + from_player["h"]
+                to_x = to_player["x"] + to_player["w"] / 2
+                to_y = to_player["y"] + to_player["h"]
+
+                dist = math.sqrt((from_x - to_x) ** 2 + (from_y - to_y) ** 2)
+
+                event = {**turn, "distance": round(dist, 1)}
+
+                if dist <= tackle_radius:
+                    event["type"] = "tackle"
+                    tackles.append(event)
+                else:
+                    event["type"] = "interception"
+                    interceptions.append(event)
+            else:
+                # Can't find players on that frame — default to interception
+                interceptions.append({**turn, "type": "interception", "distance": None})
+
+        print(f"[EventsAgent] Tackles: {len(tackles)}, Interceptions: {len(interceptions)}")
+        return tackles, interceptions
