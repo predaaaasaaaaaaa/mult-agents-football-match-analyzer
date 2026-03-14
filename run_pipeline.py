@@ -88,6 +88,13 @@ def main():
     for i in interceptions:
         print(f"  INTERCEPT  Frame {i['frame']}: track_{i['from_track_id']} (Team {i['from_team']}) → track_{i['to_track_id']} (Team {i['to_team']})")
 
+    # Step 6: Analytics Agent — aggregate stats
+    print("\n" + "=" * 50)
+    print("STEP 6: Analytics Agent")
+    print("=" * 50)
+    from src.agents.analytics.analytics_agent import AnalyticsAgent
+    analytics = AnalyticsAgent()
+    analytics.process(possession_log, passes, tackles, interceptions)
 
 if __name__ == "__main__":
     main()
