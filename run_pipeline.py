@@ -1,14 +1,16 @@
 """
-Runs the full pipeline: Vision → Interpolation → Teams → Events
+run_pipeline.py
+Runs the full pipeline: Vision → Interpolation → Teams → Events → Analytics → Report
 """
 
 import json
 import os
+from dotenv import load_dotenv
 from src.agents.vision.vision_agent import VisionAgent
 from src.agents.events.events_agent import EventsAgent
 from src.utils.ball_interpolation import BallInterpolator
 from src.utils.team_classifier import TeamClassifier
-
+load_dotenv()
 
 def main():
     video_path = "data/match_clip.mp4"
@@ -95,6 +97,14 @@ def main():
     from src.agents.analytics.analytics_agent import AnalyticsAgent
     analytics = AnalyticsAgent()
     analytics.process(possession_log, passes, tackles, interceptions)
+
+    # Step 7: Reporting Agent — LLM match report
+    print("\n" + "=" * 50)
+    print("STEP 7: Reporting Agent (Groq LLM)")
+    print("=" * 50)
+    from src.agents.reporting.reporting_agent import ReportingAgent
+    reporter = ReportingAgent()
+    report = reporter.generate_report(analytics)
 
 if __name__ == "__main__":
     main()
