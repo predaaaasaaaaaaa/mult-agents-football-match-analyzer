@@ -15,7 +15,7 @@ graph = build_match_graph()
 # Define initial state — every key in MatchAnalysisState needs a starting value
 initial_state = {
     "video_path": "data/match_clip.mp4",
-    "max_frames": 100,  # Small test — just 100 frames
+    "max_frames": None,  
     "tracking_data": [],
     "enriched_data": [],
     "possession_log": [],

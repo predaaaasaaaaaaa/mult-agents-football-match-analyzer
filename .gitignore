@@ -19,3 +19,5 @@ runs/
 
 data/tracking_data.json
 data/tracking_data_teams.json
+
+data/cache/

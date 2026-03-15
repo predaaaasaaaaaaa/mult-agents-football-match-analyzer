@@ -3,14 +3,21 @@ nodes.py — LangGraph Node Functions
 =====================================
 Each function wraps an existing agent and makes it LangGraph-compatible.
 
-A LangGraph node is just a function that:
+A LangGraph node is a function that:
     - Takes the full state dict as input
     - Returns a dict with ONLY the keys it wants to update
     - LangGraph merges the returned keys into the state automatically
+
+Caching:
+    Vision, interpolation, and team classification results are cached
+    per video in data/cache/. Cache filenames are derived from the
+    video filename, so each video gets its own cache files.
+    Example: match_clip.mp4 → data/cache/match_clip_tracking.json
 """
 
 import os
 import json
+from pathlib import Path
 from src.agents.vision.vision_agent import VisionAgent
 from src.agents.events.events_agent import EventsAgent
 from src.agents.analytics.analytics_agent import AnalyticsAgent
@@ -20,12 +27,31 @@ from src.utils.team_classifier import TeamClassifier
 
 
 # =============================================================================
+# CACHE HELPER
+# =============================================================================
+
+def _cache_path(video_path: str, suffix: str) -> str:
+    """
+    Generate a cache file path based on the video filename.
+
+    Example:
+        _cache_path("data/match_clip.mp4", "tracking")
+        → "data/cache/match_clip_tracking.json"
+    """
+    video_name = Path(video_path).stem  # "match_clip"
+    cache_dir = "data/cache"
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f"{video_name}_{suffix}.json")
+
+
+# =============================================================================
 # NODE 1: Vision (YOLO + ByteTrack)
 # =============================================================================
 
 def vision_node(state: dict) -> dict:
     """
     Run YOLOv8s + ByteTrack on the video.
+    Skips if cached tracking data exists for this video.
 
     Reads:  video_path, max_frames
     Writes: tracking_data, status
@@ -34,12 +60,32 @@ def vision_node(state: dict) -> dict:
     print("NODE: Vision Agent (YOLO + ByteTrack)")
     print("=" * 50)
 
+    cache_file = _cache_path(state["video_path"], "tracking")
+
+    # Check cache
+    if os.path.exists(cache_file) and state.get("max_frames") is None:
+        print(f"  [CACHE HIT] Loading from {cache_file}")
+        with open(cache_file, "r") as f:
+            tracking_data = json.load(f)
+        print(f"  Loaded {len(tracking_data)} detections")
+        return {
+            "tracking_data": tracking_data,
+            "status": "vision_done",
+        }
+
     try:
         vision = VisionAgent(model_path="yolov8s.pt")
         tracking_data = vision.process(
             state["video_path"],
             max_frames=state.get("max_frames"),
         )
+
+        # Save to cache (only for full runs, not limited frame tests)
+        if state.get("max_frames") is None:
+            with open(cache_file, "w") as f:
+                json.dump(tracking_data, f)
+            print(f"  [CACHED] Saved to {cache_file}")
+
         return {
             "tracking_data": tracking_data,
             "status": "vision_done",
@@ -59,6 +105,7 @@ def vision_node(state: dict) -> dict:
 def interpolation_node(state: dict) -> dict:
     """
     Fill gaps in ball detection using linear interpolation.
+    No separate cache — this is fast and always runs on tracking_data.
 
     Reads:  tracking_data
     Writes: enriched_data, status
@@ -70,7 +117,6 @@ def interpolation_node(state: dict) -> dict:
     try:
         interpolator = BallInterpolator(max_gap=100)
 
-        # Get total frames from tracking data
         player_frames = [d["frame"] for d in state["tracking_data"] if d["type"] == "player"]
         total_frames = max(player_frames) + 1 if player_frames else 5230
 
@@ -94,6 +140,7 @@ def interpolation_node(state: dict) -> dict:
 def teams_node(state: dict) -> dict:
     """
     Classify players into Team A / Team B using jersey color clustering.
+    Skips if cached team-labeled data exists for this video.
 
     Reads:  video_path, enriched_data
     Writes: enriched_data (now with team labels), status
@@ -102,10 +149,30 @@ def teams_node(state: dict) -> dict:
     print("NODE: Team Classification")
     print("=" * 50)
 
+    cache_file = _cache_path(state["video_path"], "teams")
+
+    # Check cache
+    if os.path.exists(cache_file) and state.get("max_frames") is None:
+        print(f"  [CACHE HIT] Loading from {cache_file}")
+        with open(cache_file, "r") as f:
+            labeled = json.load(f)
+        print(f"  Loaded {len(labeled)} detections with team labels")
+        return {
+            "enriched_data": labeled,
+            "status": "teams_done",
+        }
+
     try:
         classifier = TeamClassifier()
         classifier.fit(state["video_path"], state["enriched_data"], sample_frames=100)
         labeled = classifier.predict(state["video_path"], state["enriched_data"])
+
+        # Save to cache (only for full runs)
+        if state.get("max_frames") is None:
+            with open(cache_file, "w") as f:
+                json.dump(labeled, f)
+            print(f"  [CACHED] Saved to {cache_file}")
+
         return {
             "enriched_data": labeled,
             "status": "teams_done",
@@ -213,17 +280,15 @@ def reporting_node(state: dict) -> dict:
     Reads:  player_stats, team_stats
     Writes: report, status
 
-    NOTE: We can't pass the AnalyticsAgent instance through LangGraph state
-    (it's not serializable). So we reconstruct a minimal analytics object
-    with the stats from state, which is all the ReportingAgent needs.
+    The ReportingAgent expects an AnalyticsAgent instance, but LangGraph
+    state only holds plain data (dicts, lists, strings). So a fresh
+    AnalyticsAgent is created and populated with stats from state.
     """
     print("=" * 50)
     print("NODE: Reporting Agent (Groq LLM)")
     print("=" * 50)
 
     try:
-        # Reconstruct a minimal analytics object for the reporter
-        # ReportingAgent only reads .player_stats and .team_stats
         analytics = AnalyticsAgent(fps=25)
         analytics.player_stats = state["player_stats"]
         analytics.team_stats = state["team_stats"]
