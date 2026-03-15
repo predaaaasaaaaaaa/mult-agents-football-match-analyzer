@@ -7,8 +7,6 @@ A LangGraph node is just a function that:
     - Takes the full state dict as input
     - Returns a dict with ONLY the keys it wants to update
     - LangGraph merges the returned keys into the state automatically
-
-We don't rewrite agents here — we just call them.
 """
 
 import os
