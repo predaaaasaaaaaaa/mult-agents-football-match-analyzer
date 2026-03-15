@@ -32,21 +32,28 @@ One short paragraph (2-3 sentences) summarizing the overall story of the match.
 | Tackles Won | X | Y |
 | Interceptions | X | Y |
 | Turnovers Lost | X | Y |
+| Avg Distance (px) | X | Y |
+| Max Speed (px/s) | X | Y |
+| Total Sprints | X | Y |
 
 ## Tactical Analysis
 One paragraph (3-4 sentences) analyzing what the numbers reveal about each team's approach — pressing, dominance, defensive solidity.
 
+## Physical Analysis
+One paragraph (2-3 sentences) analyzing the physical output — which team worked harder, who covered the most ground, sprint patterns.
+
 ## Standout Performers
-Bullet list of 3-5 players with a one-line note on what they did well. Use track IDs (e.g., "Player #96").
+Bullet list of 3-5 players with a one-line note on what they did well. Include physical stats where relevant.
 
 ## Data Notes
 One sentence acknowledging any data limitations.
 
 RULES:
-- Be concise. Total report should be under 250 words.
+- Be concise. Total report should be under 300 words.
 - Write like a Sky Sports or BBC Sport pundit — sharp, insightful, no filler.
 - Focus on PATTERNS, not just numbers.
-- Do NOT repeat raw numbers the reader can see in the table."""
+- Do NOT repeat raw numbers the reader can see in the table.
+- All distances/speeds are in pixels — focus on relative comparisons between players, not absolute values."""
 
     def generate_report(self, analytics_agent):
         """
@@ -95,29 +102,33 @@ RULES:
             lines.append(f"  Turnovers won: {ts['total_turnovers_won']}")
             lines.append(f"  Tackles won: {ts['total_tackles']}")
             lines.append(f"  Interceptions: {ts['total_interceptions']}")
+            lines.append(f"  Avg distance covered (px): {ts['avg_distance_px']}")
+            lines.append(f"  Max speed (px/s): {ts['avg_top_speed_px_s']}")
+            lines.append(f"  Total sprints: {ts['total_sprints']}")
             lines.append("")
 
-        # Top players
-        lines.append("Top Players (by involvement):")
-        sorted_players = sorted(
+        # Top players by physical output
+        lines.append("Top Players (by distance covered):")
+        sorted_physical = sorted(
             analytics_agent.player_stats.values(),
-            key=lambda p: p["passes_made"] + p["turnovers_won"] + p["tackles_made"] + p["possession_frames"],
+            key=lambda p: p["distance_px"],
             reverse=True,
         )
 
-        for p in sorted_players[:10]:
+        for p in sorted_physical[:10]:
             lines.append(
                 f"  Player #{p['track_id']} (Team {p['team']}): "
-                f"{p['passes_made']} passes made, "
-                f"{p['passes_received']} received, "
-                f"{p['tackles_made']} tackles, "
-                f"{p['interceptions_made']} interceptions, "
+                f"distance={p['distance_px']}px, "
+                f"top_speed={p['top_speed_px_s']}px/s, "
+                f"sprints={p['sprint_count']}, "
+                f"{p['passes_made']} passes, "
                 f"{p['possession_frames']} frames on ball"
             )
 
         # Context
         lines.append("")
         lines.append("NOTE: This data comes from computer vision analysis of broadcast footage.")
+        lines.append("All distances/speeds are in pixels (not meters) — relative comparisons between players are valid.")
         lines.append(f"Ball was detected/interpolated on ~47% of frames, so actual event counts are likely higher.")
         lines.append(f"Track IDs change when players leave/re-enter camera view, so one real player may have multiple track IDs.")
 
