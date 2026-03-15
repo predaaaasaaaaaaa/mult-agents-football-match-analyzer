@@ -19,6 +19,7 @@ Session Store:
 """
 
 import os
+import time
 from pathlib import Path
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -278,6 +279,31 @@ RULES:
             content = msg.content if hasattr(msg, 'content') else str(msg)
             total_chars += len(content)
         return total_chars // 4
+    
+    def _safe_llm_invoke(self, messages, use_tools=False):
+        """
+        Call Groq with automatic retry on rate limit errors.
+        Waits and retries up to 3 times if TPM limit is hit.
+
+        Groq free tier: 12,000 tokens per minute.
+        When the limit is hit, we wait 60 seconds and retry.
+        """
+        llm = self.llm_with_tools if use_tools else self.llm
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                return llm.invoke(messages)
+            except Exception as e:
+                error_str = str(e)
+                if "413" in error_str or "rate_limit" in error_str or "tokens" in error_str:
+                    wait_time = 30 * (attempt + 1)
+                    print(f"[Orchestrator] Rate limited. Waiting {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+
+        raise Exception("Groq rate limit exceeded after 3 retries. Try again in a minute.")
 
     def chat(self, user_message: str) -> str:
         """
@@ -297,13 +323,13 @@ RULES:
 
         # Keep conversation history under control (Groq free tier = 12k TPM)
         # Estimate tokens and trim oldest messages until under budget
-        self._trim_history(max_tokens=6000)
+        self._trim_history(max_tokens=3000)
 
         # Build messages: system prompt + conversation history
         messages = [self.system_prompt] + self.conversation_history
 
         # First LLM call — might return text or a tool call
-        response = self.llm_with_tools.invoke(messages)
+        response = self._safe_llm_invoke(messages, use_tools=True)
 
         # Check if the LLM wants to call a tool
         if response.tool_calls:
@@ -317,15 +343,19 @@ RULES:
             # Execute the tool
             tool_result = self._execute_tool(tool_name, tool_args)
 
-            # Add the AI's tool call and the result to history
+            # Store a SHORT version in conversation history to save tokens.
+            # The full data stays in session_store — tools can access it anytime.
+            short_result = tool_result[:500] if len(tool_result) > 500 else tool_result
+
+            # Add the AI's tool call and the SHORT result to history
             self.conversation_history.append(response)
             self.conversation_history.append(
-                ToolMessage(content=tool_result, tool_call_id=tool_call["id"])
+                ToolMessage(content=short_result, tool_call_id=tool_call["id"])
             )
 
             # Second LLM call — now with the tool result, generate final response
             messages = [self.system_prompt] + self.conversation_history
-            final_response = self.llm.invoke(messages)
+            final_response = self._safe_llm_invoke(messages, use_tools=False)
 
             self.conversation_history.append(final_response)
             return final_response.content
