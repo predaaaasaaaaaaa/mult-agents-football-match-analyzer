@@ -7,7 +7,7 @@ the appropriate action, and returns a human-readable response.
 
     LangChain handles the plumbing:
     1. User message → LLM (with tools bound)
-    2. LLM returns a tool call 
+    2. LLM returns a tool call
     3. We execute the tool
     4. Tool result → LLM again
     5. LLM generates a final human-readable response
@@ -37,6 +37,7 @@ load_dotenv()
 # WHEN to use it. The better the docstring, the smarter the routing.
 # =============================================================================
 
+
 @tool
 def analyze_video(video_path: str) -> str:
     """
@@ -47,7 +48,7 @@ def analyze_video(video_path: str) -> str:
     Args:
         video_path: Path to the video file (e.g. "data/match_clip.mp4")
     """
-    # This gets overridden by the Orchestrator 
+    # This gets overridden by the Orchestrator
     return f"Analysis started for {video_path}"
 
 
@@ -101,12 +102,19 @@ def list_analyses() -> str:
     return "Listing analyses"
 
 
-TOOLS = [analyze_video, get_match_summary, get_player_stats, get_team_stats, list_analyses]
+TOOLS = [
+    analyze_video,
+    get_match_summary,
+    get_player_stats,
+    get_team_stats,
+    list_analyses,
+]
 
 
 # =============================================================================
 # ORCHESTRATOR CLASS
 # =============================================================================
+
 
 class Orchestrator:
     """
@@ -139,7 +147,8 @@ class Orchestrator:
         # Compiled LangGraph pipeline
         self.graph = build_match_graph()
 
-        self.system_prompt = SystemMessage(content="""You are a football match analysis assistant.
+        self.system_prompt = SystemMessage(
+            content="""You are a football match analysis assistant.
 You help users analyze football match videos and answer questions about the results.
 
 RULES:
@@ -150,7 +159,8 @@ RULES:
 - If only one video has been analyzed, assume the user is asking about that one.
 - Be concise and use football terminology naturally.
 - When presenting stats, focus on insights, not just raw numbers.
-- All distances/speeds are in pixels — compare players relatively, don't state absolute values as meaningful.""")
+- All distances/speeds are in pixels — compare players relatively, don't state absolute values as meaningful."""
+        )
 
     def _normalize_video_name(self, name: str) -> str:
         """Strip extension and path to get a clean video name."""
@@ -171,7 +181,12 @@ RULES:
             name = self._normalize_video_name(tool_args["video_name"])
             if name not in self.session_store:
                 return f"No analysis found for '{name}'. Available: {list(self.session_store.keys())}"
-            return self.session_store[name].get("report", "No report available.")
+            report = self.session_store[name].get("report", "No report available.")
+            # Truncate to avoid blowing Groq's token limit in conversation history
+            if len(report) > 1000:
+                return report[:1000] + "\n\n[Truncated — ask about specific players or teams for details]"
+            
+            return report
 
         elif tool_name == "get_player_stats":
             name = self._normalize_video_name(tool_args["video_name"])
@@ -243,6 +258,26 @@ RULES:
             f"Status: {result.get('status', 'unknown')}"
         )
         return summary
+    
+    def _trim_history(self, max_tokens: int = 6000):
+        """
+        Trim conversation history to stay under the token budget.
+        Removes oldest messages first. Estimates ~4 chars per token.
+
+        This is critical for Groq free tier (12k TPM limit).
+        System prompt uses ~500 tokens, LLM response needs ~2000,
+        so history gets ~6000 tokens max.
+        """
+        while self._estimate_tokens() > max_tokens and len(self.conversation_history) > 2:
+            self.conversation_history.pop(0)
+
+    def _estimate_tokens(self) -> int:
+        """Rough token estimate for conversation history. ~4 chars = 1 token."""
+        total_chars = 0
+        for msg in self.conversation_history:
+            content = msg.content if hasattr(msg, 'content') else str(msg)
+            total_chars += len(content)
+        return total_chars // 4
 
     def chat(self, user_message: str) -> str:
         """
@@ -259,6 +294,10 @@ RULES:
         """
         # Add user message to history
         self.conversation_history.append(HumanMessage(content=user_message))
+
+        # Keep conversation history under control (Groq free tier = 12k TPM)
+        # Estimate tokens and trim oldest messages until under budget
+        self._trim_history(max_tokens=6000)
 
         # Build messages: system prompt + conversation history
         messages = [self.system_prompt] + self.conversation_history
