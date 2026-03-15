@@ -10,7 +10,9 @@ from src.agents.vision.vision_agent import VisionAgent
 from src.agents.events.events_agent import EventsAgent
 from src.utils.ball_interpolation import BallInterpolator
 from src.utils.team_classifier import TeamClassifier
+
 load_dotenv()
+
 
 def main():
     video_path = "data/match_clip.mp4"
@@ -84,18 +86,25 @@ def main():
     print(f"  Interceptions: {len(interceptions)}")
 
     for p in passes:
-        print(f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})")
+        print(
+            f"  PASS  Frame {p['frame']}: track_{p['from_track_id']} → track_{p['to_track_id']} (Team {p['from_team']})"
+        )
     for t in tackles:
-        print(f"  TACKLE  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) tackled by track_{t['to_track_id']} (Team {t['to_team']}) [{t['distance']}px]")
+        print(
+            f"  TACKLE  Frame {t['frame']}: track_{t['from_track_id']} (Team {t['from_team']}) tackled by track_{t['to_track_id']} (Team {t['to_team']}) [{t['distance']}px]"
+        )
     for i in interceptions:
-        print(f"  INTERCEPT  Frame {i['frame']}: track_{i['from_track_id']} (Team {i['from_team']}) → track_{i['to_track_id']} (Team {i['to_team']})")
+        print(
+            f"  INTERCEPT  Frame {i['frame']}: track_{i['from_track_id']} (Team {i['from_team']}) → track_{i['to_track_id']} (Team {i['to_team']})"
+        )
 
-    # Step 6: Analytics Agent — aggregate stats
+    # Step 6: Analytics Agent — aggregate stats + physical data
     print("\n" + "=" * 50)
     print("STEP 6: Analytics Agent")
     print("=" * 50)
     from src.agents.analytics.analytics_agent import AnalyticsAgent
-    analytics = AnalyticsAgent()
+    analytics = AnalyticsAgent(fps=25)
+    analytics.compute_physical_stats(enriched_data)
     analytics.process(possession_log, passes, tackles, interceptions)
 
     # Step 7: Reporting Agent — LLM match report
@@ -103,8 +112,10 @@ def main():
     print("STEP 7: Reporting Agent (Groq LLM)")
     print("=" * 50)
     from src.agents.reporting.reporting_agent import ReportingAgent
+
     reporter = ReportingAgent()
     report = reporter.generate_report(analytics)
+
 
 if __name__ == "__main__":
     main()
