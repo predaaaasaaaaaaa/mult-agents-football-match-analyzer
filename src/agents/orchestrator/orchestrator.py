@@ -206,7 +206,26 @@ RULES:
             name = self._normalize_video_name(tool_args["video_name"])
             if name not in self.session_store:
                 return f"No analysis found for '{name}'."
-            return str(self.session_store[name].get("team_stats", {}))
+            result = self.session_store[name]
+            team_stats = result.get("team_stats", {})
+            possession_log = result.get("possession_log", [])
+            total_poss = sum(t.get("possession_frames", 0) for t in team_stats.values())
+
+            lines = []
+            for team_name in ["A", "B"]:
+                ts = team_stats.get(team_name, {})
+                poss_pct = (ts.get("possession_frames", 0) / total_poss * 100) if total_poss > 0 else 0
+                lines.append(f"Team {team_name}:")
+                lines.append(f"  Possession: {poss_pct:.1f}%")
+                lines.append(f"  Passes: {ts.get('total_passes', 0)}")
+                lines.append(f"  Tackles won: {ts.get('total_tackles', 0)}")
+                lines.append(f"  Interceptions: {ts.get('total_interceptions', 0)}")
+                lines.append(f"  Turnovers lost: {ts.get('total_turnovers_lost', 0)}")
+                lines.append(f"  Avg distance (px): {ts.get('avg_distance_px', 0)}")
+                lines.append(f"  Max speed (px/s): {ts.get('avg_top_speed_px_s', 0)}")
+                lines.append(f"  Total sprints: {ts.get('total_sprints', 0)}")
+                lines.append("")
+            return "\n".join(lines)
 
         elif tool_name == "list_analyses":
             if not self.session_store:
@@ -271,6 +290,20 @@ RULES:
         """
         while self._estimate_tokens() > max_tokens and len(self.conversation_history) > 2:
             self.conversation_history.pop(0)
+
+    def _sanitize_response(self, text: str) -> str:
+        """
+        Clean up LLM responses before sending to the user.
+        Removes leaked function call tags that Llama sometimes hallucinates.
+        """
+        import re
+        # Remove <function=...>...</function> tags
+        text = re.sub(r'<function=\w+>.*?</function>', '', text)
+        # Remove any leftover XML-like tags
+        text = re.sub(r'<\|.*?\|>', '', text)
+        # Clean up extra whitespace
+        text = re.sub(r'\n{3,}', '\n\n', text).strip()
+        return text
 
     def _estimate_tokens(self) -> int:
         """Rough token estimate for conversation history. ~4 chars = 1 token."""
@@ -358,9 +391,9 @@ RULES:
             final_response = self._safe_llm_invoke(messages, use_tools=False)
 
             self.conversation_history.append(final_response)
-            return final_response.content
+            return self._sanitize_response(final_response.content)
 
         else:
             # LLM just responded with text (no tool call needed)
             self.conversation_history.append(response)
-            return response.content
+            return self._sanitize_response(response.content)
