@@ -15,7 +15,7 @@ which uses LLM + tool calling to handle it.
 
 import os
 import logging
-from telegram import Update
+from telegram import Update, Document
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -119,6 +119,61 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Something went wrong. Try again, or use /reset to clear history."
         )
 
+# =============================================================================
+# VIDEO UPLOAD HANDLER
+# =============================================================================
+
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle video file uploads from Telegram.
+
+    Telegram bot API limits file downloads to 20MB.
+    For larger match videos, users should place files in data/ manually.
+    """
+    # Get the video file (could be video or document)
+    if update.message.video:
+        file_obj = update.message.video
+        file_name = update.message.video.file_name or "uploaded_video.mp4"
+    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("video"):
+        file_obj = update.message.document
+        file_name = update.message.document.file_name or "uploaded_video.mp4"
+    else:
+        await update.message.reply_text("Please send a video file (.mp4).")
+        return
+
+    file_size_mb = file_obj.file_size / (1024 * 1024)
+
+    # Check Telegram's 20MB download limit
+    if file_size_mb > 20:
+        await update.message.reply_text(
+            f"⚠️ Video is {file_size_mb:.1f}MB — too large for Telegram's 20MB limit.\n\n"
+            f"For full match videos, place the file in the project's data/ folder manually, then tell me:\n"
+            f'"Analyze data/your_video.mp4"'
+        )
+        return
+
+    await update.message.reply_text(f"📥 Downloading {file_name} ({file_size_mb:.1f}MB)...")
+
+    try:
+        # Download the file
+        tg_file = await file_obj.get_file()
+        save_path = os.path.join("data", file_name)
+        await tg_file.download_to_drive(save_path)
+
+        await update.message.reply_text(f"✅ Saved to {save_path}. Starting analysis...")
+
+        # Auto-trigger analysis through the Orchestrator
+        await update.message.chat.send_action("typing")
+        response = orchestrator.chat(f"Analyze {save_path}")
+        await update.message.reply_text(response)
+
+    except Exception as e:
+        logger.error(f"Video download failed: {e}")
+        await update.message.reply_text(
+            f"Download failed. Place the video in data/ manually and tell me:\n"
+            f'"Analyze data/{file_name}"'
+        )
+
 
 # =============================================================================
 # BOT STARTUP
@@ -136,6 +191,8 @@ def run_bot():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("reset", reset_command))
+    app.add_handler(MessageHandler(filters.VIDEO, handle_video))
+    app.add_handler(MessageHandler(filters.Document.VIDEO, handle_video))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Bot starting...")
