@@ -160,7 +160,8 @@ RULES:
 - If only one video has been analyzed, assume the user is asking about that one.
 - Be concise and use football terminology naturally.
 - When presenting stats, focus on insights, not just raw numbers.
-- All distances/speeds are in pixels — compare players relatively, don't state absolute values as meaningful."""
+- All distances/speeds are in pixels — compare players relatively, don't state absolute values as meaningful.
+- When tool results contain formatted tables or stats, present them EXACTLY as received. Do not rewrite or paraphrase formatted data."""
         )
 
     def _normalize_video_name(self, name: str) -> str:
@@ -195,12 +196,27 @@ RULES:
             if name not in self.session_store:
                 return f"No analysis found for '{name}'."
             player_stats = self.session_store[name].get("player_stats", {})
-            # track_id might be int or str depending on how it was stored
             stats = player_stats.get(track_id) or player_stats.get(str(track_id))
             if not stats:
                 available = sorted([str(k) for k in player_stats.keys()])[:20]
                 return f"No player with track ID {track_id}. Available IDs: {', '.join(available)}"
-            return str(stats)
+            return (
+                f"📊 PLAYER #{stats['track_id']} — Team {stats['team']}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Passes made:          {stats['passes_made']}\n"
+                f"Passes received:      {stats['passes_received']}\n"
+                f"Tackles made:         {stats['tackles_made']}\n"
+                f"Tackles suffered:     {stats['tackles_suffered']}\n"
+                f"Interceptions made:   {stats['interceptions_made']}\n"
+                f"Interceptions suffered: {stats['interceptions_suffered']}\n"
+                f"Turnovers lost:       {stats['turnovers_lost']}\n"
+                f"Turnovers won:        {stats['turnovers_won']}\n"
+                f"Possession frames:    {stats['possession_frames']}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Distance covered:     {stats['distance_px']}px\n"
+                f"Top speed:            {stats['top_speed_px_s']}px/s\n"
+                f"Sprints:              {stats['sprint_count']}"
+            )
 
         elif tool_name == "get_team_stats":
             name = self._normalize_video_name(tool_args["video_name"])
@@ -208,24 +224,28 @@ RULES:
                 return f"No analysis found for '{name}'."
             result = self.session_store[name]
             team_stats = result.get("team_stats", {})
-            possession_log = result.get("possession_log", [])
             total_poss = sum(t.get("possession_frames", 0) for t in team_stats.values())
 
-            lines = []
-            for team_name in ["A", "B"]:
-                ts = team_stats.get(team_name, {})
-                poss_pct = (ts.get("possession_frames", 0) / total_poss * 100) if total_poss > 0 else 0
-                lines.append(f"Team {team_name}:")
-                lines.append(f"  Possession: {poss_pct:.1f}%")
-                lines.append(f"  Passes: {ts.get('total_passes', 0)}")
-                lines.append(f"  Tackles won: {ts.get('total_tackles', 0)}")
-                lines.append(f"  Interceptions: {ts.get('total_interceptions', 0)}")
-                lines.append(f"  Turnovers lost: {ts.get('total_turnovers_lost', 0)}")
-                lines.append(f"  Avg distance (px): {ts.get('avg_distance_px', 0)}")
-                lines.append(f"  Max speed (px/s): {ts.get('avg_top_speed_px_s', 0)}")
-                lines.append(f"  Total sprints: {ts.get('total_sprints', 0)}")
-                lines.append("")
-            return "\n".join(lines)
+            ts_a = team_stats.get("A", {})
+            ts_b = team_stats.get("B", {})
+            poss_a = (ts_a.get("possession_frames", 0) / total_poss * 100) if total_poss > 0 else 0
+            poss_b = (ts_b.get("possession_frames", 0) / total_poss * 100) if total_poss > 0 else 0
+
+            return (
+                f"⚽ TEAM COMPARISON — {name}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{'Stat':<20} {'Team A':>8} {'Team B':>8}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{'Possession':<20} {poss_a:>7.1f}% {poss_b:>7.1f}%\n"
+                f"{'Passes':<20} {ts_a.get('total_passes', 0):>8} {ts_b.get('total_passes', 0):>8}\n"
+                f"{'Tackles Won':<20} {ts_a.get('total_tackles', 0):>8} {ts_b.get('total_tackles', 0):>8}\n"
+                f"{'Interceptions':<20} {ts_a.get('total_interceptions', 0):>8} {ts_b.get('total_interceptions', 0):>8}\n"
+                f"{'Turnovers Lost':<20} {ts_a.get('total_turnovers_lost', 0):>8} {ts_b.get('total_turnovers_lost', 0):>8}\n"
+                f"{'Avg Distance (px)':<20} {ts_a.get('avg_distance_px', 0):>8} {ts_b.get('avg_distance_px', 0):>8}\n"
+                f"{'Max Speed (px/s)':<20} {ts_a.get('avg_top_speed_px_s', 0):>8} {ts_b.get('avg_top_speed_px_s', 0):>8}\n"
+                f"{'Total Sprints':<20} {ts_a.get('total_sprints', 0):>8} {ts_b.get('total_sprints', 0):>8}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
 
         elif tool_name == "list_analyses":
             if not self.session_store:
