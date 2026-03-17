@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/*.mp4
+data/*.json
+data/cache/
+runs/
+*.avi
+*.pt
+.git/
+IGNOREEOF

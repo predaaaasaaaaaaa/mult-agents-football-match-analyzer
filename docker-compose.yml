@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  football-analyzer:
+    build: .
+    container_name: football-analyzer
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+COMPOSEEOF
