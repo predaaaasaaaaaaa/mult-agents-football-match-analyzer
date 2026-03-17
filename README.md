@@ -306,6 +306,6 @@ MIT
 
 ## Author
 
-**Samy Metref** — [GitHub](https://github.com/predaaaaasaaaaaaa) · [LinkedIn](https://linkedin.com/in/samy-metref)
+**Samy Metref** — [GitHub](https://github.com/predaaaaasaaaaaaa) · [LinkedIn](www.linkedin.com/in/samy-metref-77744133b)
 
 Built from scratch. If you're a football club that needs affordable analytics — or a developer interested in token-efficient agent architecture — reach out.
