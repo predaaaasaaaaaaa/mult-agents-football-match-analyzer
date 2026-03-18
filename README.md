@@ -122,8 +122,22 @@ MP4 Video
 
 ## Quick Start
 
-### Option 1: Docker (recommended)
+### Option 1: Docker Hub (fastest)
+```bash
+# 1. Pull the image
+docker pull samymetref/football-match-analyzer:latest
 
+# 2. Create a .env file with your keys
+echo "GROQ_API_KEY=your_key_here" > .env
+echo "GROQ_MODEL=llama-3.3-70b-versatile" >> .env
+echo "LLM_PROVIDER=groq" >> .env
+echo "TELEGRAM_BOT_TOKEN=your_token_here" >> .env
+
+# 3. Run it
+docker run --env-file .env -v $(pwd)/data:/app/data samymetref/football-match-analyzer:latest
+```
+
+### Option 2: Docker (build from source)
 ```bash
 # 1. Clone the repo
 git clone https://github.com/predaaaaasaaaaaaa/mult-agents-football-match-analyzer.git
@@ -140,7 +154,7 @@ cp .env.example .env
 docker-compose up --build
 ```
 
-### Option 2: Manual setup
+### Option 3: Manual setup
 
 ```bash
 # 1. Clone the repo

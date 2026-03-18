@@ -1,0 +1,25 @@
+# Core
+python-dotenv>=1.2.0
+
+# Computer Vision
+ultralytics>=8.4.0
+opencv-python>=4.13.0
+supervision>=0.27.0
+
+# ML
+scikit-learn>=1.8.0
+numpy>=2.4.0
+
+# LLM + Agents
+langchain>=1.2.0
+langchain-core>=1.2.0
+langchain-groq>=1.1.0
+langgraph>=1.0.0
+
+# Telegram
+python-telegram-bot>=22.6
+
+# PyTorch CPU-only (keeps Docker image ~1.5GB instead of ~3GB)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.10.0
+torchvision>=0.25.0
